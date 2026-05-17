@@ -21,6 +21,16 @@ Build web:
 zig build web -Demsdk=/path/to/emsdk
 ```
 
+Web deployment:
+
+- Latest deployed build: [glowtrail.cbrnl.com](https://glowtrail.cbrnl.com)
+- Workflow: `.github/workflows/deploy-pages.yml`
+- Expected DNS: `CNAME` `glowtrail` -> `cabernal.github.io`
+
+The Pages workflow builds with Zig `0.15.2` and Emscripten `4.0.14`, copies
+`zig-out/web/glowtrail.html` to `zig-out/web/index.html`, writes
+`glowtrail.cbrnl.com` to `zig-out/web/CNAME`, and deploys `zig-out/web`.
+
 Architecture notes and diagram:
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
