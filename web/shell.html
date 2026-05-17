@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Glowtrail</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Trebuchet MS", "Avenir Next", sans-serif;
+      background:
+        radial-gradient(900px 560px at 16% 12%, rgba(68, 134, 140, 0.22), transparent 68%),
+        radial-gradient(720px 520px at 85% 5%, rgba(180, 148, 64, 0.14), transparent 70%),
+        linear-gradient(145deg, #071011 0%, #111719 56%, #0a1014 100%);
+      color: #edf5f4;
+    }
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 10px;
+      padding: 10px;
+      box-sizing: border-box;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 13px;
+      border: 1px solid rgba(161, 203, 195, 0.28);
+      background: rgba(8, 14, 16, 0.78);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
+      font-size: 14px;
+    }
+    #canvas {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      display: block;
+      border: 1px solid rgba(161, 203, 195, 0.28);
+      background: #0b1012;
+      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.42);
+      touch-action: none;
+    }
+    .muted {
+      color: rgba(226, 238, 236, 0.72);
+    }
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.72);
+      z-index: 10;
+      transition: opacity 160ms ease;
+    }
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .loading-panel {
+      width: min(380px, calc(100vw - 32px));
+      border: 1px solid rgba(161, 203, 195, 0.32);
+      background: rgba(8, 14, 16, 0.94);
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .loading-title {
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .loading-text {
+      min-height: 18px;
+      font-size: 13px;
+      color: rgba(226, 238, 236, 0.78);
+      margin-bottom: 10px;
+      overflow-wrap: anywhere;
+    }
+    .loading-bar {
+      height: 8px;
+      background: rgba(78, 95, 97, 0.48);
+      overflow: hidden;
+    }
+    #loading-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #56c4bf, #f2c95f);
+      transition: width 140ms ease;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Glowtrail</strong>
+    <span class="muted">WASD move, Space Space Shift grind, R reset</span>
+  </header>
+  <div id="loading-screen" role="status" aria-live="polite">
+    <div class="loading-panel">
+      <div class="loading-title">Loading Glowtrail</div>
+      <div class="loading-text" id="loading-text">Loading game...</div>
+      <div class="loading-bar"><div id="loading-fill"></div></div>
+    </div>
+  </div>
+  <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+  <script>
+    (function() {
+      const loadingScreen = document.getElementById("loading-screen");
+      const loadingText = document.getElementById("loading-text");
+      const loadingFill = document.getElementById("loading-fill");
+      const canvas = document.getElementById("canvas");
+      let removed = false;
+
+      const setMessage = function(text) {
+        if (typeof text === "string" && text.trim().length > 0) {
+          loadingText.textContent = text;
+        }
+      };
+      const setProgress = function(value) {
+        loadingFill.style.width = (Math.max(0, Math.min(1, value)) * 100).toFixed(1) + "%";
+      };
+      const hide = function() {
+        if (removed) return;
+        removed = true;
+        loadingScreen.classList.add("hidden");
+        window.setTimeout(function() {
+          loadingScreen.remove();
+        }, 200);
+      };
+      const parseProgressFromText = function(text) {
+        const match = /\((\d+)\s*\/\s*(\d+)\)/.exec(text || "");
+        if (!match) return null;
+        const done = Number(match[1]);
+        const total = Number(match[2]);
+        if (!Number.isFinite(done) || !Number.isFinite(total) || total <= 0) return null;
+        return done / total;
+      };
+
+      const moduleRef = window.Module || {};
+      const prevSetStatus = moduleRef.setStatus;
+      const prevMonitorRunDependencies = moduleRef.monitorRunDependencies;
+      const prevOnRuntimeInitialized = moduleRef.onRuntimeInitialized;
+
+      moduleRef.canvas = canvas;
+      moduleRef.totalDependencies = 0;
+      moduleRef.setStatus = function(text) {
+        if (typeof prevSetStatus === "function") prevSetStatus(text);
+        if (typeof text === "string") {
+          setMessage(text);
+          const ratio = parseProgressFromText(text);
+          if (ratio !== null) setProgress(ratio);
+        }
+        if (!text || text === "Running...") {
+          setProgress(1);
+          hide();
+        }
+      };
+      moduleRef.monitorRunDependencies = function(left) {
+        if (typeof prevMonitorRunDependencies === "function") prevMonitorRunDependencies(left);
+        if (typeof left !== "number") return;
+        if (left > moduleRef.totalDependencies) moduleRef.totalDependencies = left;
+        const total = moduleRef.totalDependencies;
+        if (total > 0) {
+          setProgress((total - left) / total);
+          setMessage(left === 0 ? "Starting..." : "Loading (" + (total - left) + "/" + total + ")");
+        }
+      };
+      moduleRef.onRuntimeInitialized = function() {
+        if (typeof prevOnRuntimeInitialized === "function") prevOnRuntimeInitialized();
+        setMessage("Ready");
+        setProgress(1);
+        window.setTimeout(hide, 160);
+      };
+
+      window.Module = moduleRef;
+      setProgress(0.05);
+    })();
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>
